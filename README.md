@@ -107,8 +107,8 @@ npm install --no-save --package-lock=false @rspack/core@2.1.6 @rspack/cli@2.1.6
 npm run reproduce
 ```
 
-Versions of interest are `2.1.5`, `2.1.6`, and `2.1.10`. Run `npm ci` to return
-to the pinned `2.1.5` baseline.
+The affected deployment used `1.7.11`. Later versions of interest are `2.1.5`,
+`2.1.6`, and `2.1.10`. Run `npm ci` to return to the pinned `1.7.11` baseline.
 
 ## GitHub Actions
 
@@ -119,7 +119,7 @@ workflow. It runs a matrix of:
 - Node.js 20 and Node.js 22
 - A selected exact Rspack version and filesystem mode
 
-Start with Rspack `2.1.5` in `default` mode. If it reproduces, rerun the same
+Start with Rspack `1.7.11` in `default` mode. If it reproduces, rerun the same
 matrix in `instrumented` mode, then `sync` mode. Compare `2.1.6` and `2.1.10`
 only after capturing the baseline evidence.
 

@@ -11,8 +11,8 @@ Binaries:
   Node: 20.x or 22.x
   npm: <from artifact>
 npmPackages:
-  @rspack/cli: 2.1.5
-  @rspack/core: 2.1.5
+  @rspack/cli: 1.7.11
+  @rspack/core: 1.7.11
 ```
 
 ## Details

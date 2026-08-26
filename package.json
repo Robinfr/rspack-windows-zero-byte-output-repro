@@ -16,7 +16,7 @@
     "control:sync": "node ./scripts/run.mjs --mode sync --attempts 5 --count 13500 --bytes 8192"
   },
   "devDependencies": {
-    "@rspack/cli": "2.1.5",
-    "@rspack/core": "2.1.5"
+    "@rspack/cli": "1.7.11",
+    "@rspack/core": "1.7.11"
   }
 }
