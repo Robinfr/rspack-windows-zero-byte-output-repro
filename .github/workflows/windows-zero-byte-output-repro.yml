@@ -1,0 +1,104 @@
+name: Windows zero-byte output reproducer
+
+on:
+  workflow_dispatch:
+    inputs:
+      rspack_version:
+        description: Exact @rspack/core and @rspack/cli version
+        required: true
+        default: 2.1.5
+        type: choice
+        options:
+          - 2.1.5
+          - 2.1.6
+          - 2.1.10
+      mode:
+        description: Output filesystem mode
+        required: true
+        default: default
+        type: choice
+        options:
+          - default
+          - instrumented
+          - sync
+      attempts:
+        description: Maximum attempts per matrix job
+        required: true
+        default: "20"
+        type: string
+      file_count:
+        description: Number of files copied per attempt
+        required: true
+        default: "13500"
+        type: string
+      bytes_per_file:
+        description: Deterministic bytes in each input file
+        required: true
+        default: "8192"
+        type: string
+      uv_threadpool_size:
+        description: libuv worker pool size
+        required: true
+        default: "4"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  stress:
+    name: ${{ matrix.os }} / Node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+        node: [20, 22]
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      RSPACK_VERSION: ${{ inputs.rspack_version }}
+      REPRO_MODE: ${{ inputs.mode }}
+      REPRO_ATTEMPTS: ${{ inputs.attempts }}
+      REPRO_FILE_COUNT: ${{ inputs.file_count }}
+      REPRO_BYTES_PER_FILE: ${{ inputs.bytes_per_file }}
+      REPRO_UV_THREADPOOL_SIZE: ${{ inputs.uv_threadpool_size }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci --include=optional
+
+      - name: Select Rspack version
+        run: npm install --no-save --package-lock=false "@rspack/core@$env:RSPACK_VERSION" "@rspack/cli@$env:RSPACK_VERSION"
+
+      - name: Record environment
+        run: npx --yes envinfo --system --npmPackages '@rspack/*' --binaries > environment.txt
+
+      - name: Run stress reproducer
+        id: stress
+        continue-on-error: true
+        run: node ./scripts/run.mjs --mode $env:REPRO_MODE --attempts $env:REPRO_ATTEMPTS --count $env:REPRO_FILE_COUNT --bytes $env:REPRO_BYTES_PER_FILE --uv-threadpool-size $env:REPRO_UV_THREADPOOL_SIZE
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-zero-byte-${{ matrix.os }}-node-${{ matrix.node }}-rspack-${{ inputs.rspack_version }}-${{ inputs.mode }}
+          path: |
+            environment.txt
+            runs/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Propagate reproducer failure
+        if: steps.stress.outcome == 'failure'
+        run: exit 1
