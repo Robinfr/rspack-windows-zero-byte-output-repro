@@ -24,7 +24,7 @@ on:
       attempts:
         description: Maximum attempts per matrix job
         required: true
-        default: "20"
+        default: "5"
         type: string
       file_count:
         description: Number of files copied per attempt

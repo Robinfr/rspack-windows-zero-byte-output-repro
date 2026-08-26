@@ -11,8 +11,8 @@
   "scripts": {
     "generate": "node ./scripts/generate-input.mjs",
     "reproduce:quick": "node ./scripts/run.mjs --mode default --attempts 1 --count 256 --bytes 1024",
-    "reproduce": "node ./scripts/run.mjs --mode default --attempts 20 --count 13500 --bytes 8192",
-    "reproduce:instrumented": "node ./scripts/run.mjs --mode instrumented --attempts 20 --count 13500 --bytes 8192",
+    "reproduce": "node ./scripts/run.mjs --mode default --attempts 5 --count 13500 --bytes 8192",
+    "reproduce:instrumented": "node ./scripts/run.mjs --mode instrumented --attempts 5 --count 13500 --bytes 8192",
     "control:sync": "node ./scripts/run.mjs --mode sync --attempts 5 --count 13500 --bytes 8192"
   },
   "devDependencies": {
