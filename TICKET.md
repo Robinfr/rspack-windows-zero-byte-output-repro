@@ -8,7 +8,7 @@
 System:
   OS: Microsoft Windows Server 2022 or 2025
 Binaries:
-  Node: 20.x or 22.x
+  Node: 22.17.0
   npm: <from artifact>
 npmPackages:
   @rspack/cli: 1.7.11

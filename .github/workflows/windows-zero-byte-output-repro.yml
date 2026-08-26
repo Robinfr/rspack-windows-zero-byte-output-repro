@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       rspack_version:
-        description: Exact @rspack/core and @rspack/cli version
+        description: Exact matching @rspack/core and @rspack/cli version
         required: true
         default: 1.7.11
         type: choice
@@ -22,8 +22,25 @@ on:
           - default
           - instrumented
           - sync
+      pressure:
+        description: Native handle-pressure mode
+        required: true
+        default: none
+        type: choice
+        options:
+          - none
+          - native-emfile
+      node_version:
+        description: Exact Node.js version
+        required: true
+        default: 22.17.0
+        type: choice
+        options:
+          - 22.17.0
+          - 20.20.2
+          - 22.23.2
       attempts:
-        description: Maximum attempts per matrix job
+        description: Attempts per matrix job (maximum 5)
         required: true
         default: "5"
         type: string
@@ -42,36 +59,48 @@ on:
         required: true
         default: "4"
         type: string
+      handle_headroom:
+        description: Handles released after native exhaustion
+        required: true
+        default: "64"
+        type: string
+      handle_allocation_cap:
+        description: Safety cap for reserved handles
+        required: true
+        default: "65536"
+        type: string
 
 permissions:
   contents: read
 
 jobs:
   stress:
-    name: ${{ matrix.os }} / Node ${{ matrix.node }}
+    name: ${{ matrix.os }} / Node ${{ inputs.node_version }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         os: [windows-2022, windows-2025]
-        node: [20, 22]
     defaults:
       run:
         shell: pwsh
     env:
       RSPACK_VERSION: ${{ inputs.rspack_version }}
       REPRO_MODE: ${{ inputs.mode }}
+      REPRO_PRESSURE: ${{ inputs.pressure }}
       REPRO_ATTEMPTS: ${{ inputs.attempts }}
       REPRO_FILE_COUNT: ${{ inputs.file_count }}
       REPRO_BYTES_PER_FILE: ${{ inputs.bytes_per_file }}
       REPRO_UV_THREADPOOL_SIZE: ${{ inputs.uv_threadpool_size }}
+      REPRO_HANDLE_HEADROOM: ${{ inputs.handle_headroom }}
+      REPRO_HANDLE_ALLOCATION_CAP: ${{ inputs.handle_allocation_cap }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node }}
+          node-version: ${{ inputs.node_version }}
           cache: npm
           cache-dependency-path: package-lock.json
 
@@ -87,13 +116,21 @@ jobs:
       - name: Run stress reproducer
         id: stress
         continue-on-error: true
-        run: node ./scripts/run.mjs --mode $env:REPRO_MODE --attempts $env:REPRO_ATTEMPTS --count $env:REPRO_FILE_COUNT --bytes $env:REPRO_BYTES_PER_FILE --uv-threadpool-size $env:REPRO_UV_THREADPOOL_SIZE
+        run: |
+          if ($env:REPRO_PRESSURE -eq "native-emfile") {
+            if ($env:REPRO_MODE -ne "default") {
+              throw "Native handle pressure requires the untouched default output filesystem"
+            }
+            node ./scripts/run-handle-pressure.mjs --attempts $env:REPRO_ATTEMPTS --count $env:REPRO_FILE_COUNT --bytes $env:REPRO_BYTES_PER_FILE --uv-threadpool-size $env:REPRO_UV_THREADPOOL_SIZE --handle-headroom $env:REPRO_HANDLE_HEADROOM --handle-allocation-cap $env:REPRO_HANDLE_ALLOCATION_CAP
+          } else {
+            node ./scripts/run.mjs --mode $env:REPRO_MODE --attempts $env:REPRO_ATTEMPTS --count $env:REPRO_FILE_COUNT --bytes $env:REPRO_BYTES_PER_FILE --uv-threadpool-size $env:REPRO_UV_THREADPOOL_SIZE
+          }
 
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: windows-zero-byte-${{ matrix.os }}-node-${{ matrix.node }}-rspack-${{ inputs.rspack_version }}-${{ inputs.mode }}
+          name: windows-zero-byte-${{ matrix.os }}-node-${{ inputs.node_version }}-rspack-${{ inputs.rspack_version }}-${{ inputs.mode }}-${{ inputs.pressure }}
           path: |
             environment.txt
             runs/

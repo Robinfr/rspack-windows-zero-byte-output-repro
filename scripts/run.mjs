@@ -65,6 +65,9 @@ function parseArguments(values) {
       `mode must be default, instrumented, or sync; received ${options.mode}`,
     );
   }
+  if (options.attempts > 5) {
+    throw new Error(`attempts must not exceed 5; received ${options.attempts}`);
+  }
   return options;
 }
 
@@ -240,7 +243,7 @@ for (let attempt = 1; attempt <= options.attempts; attempt += 1) {
   reproductionFound ||= greenCorruptOutput;
   unsuccessfulBuildFound ||= !cliGreen;
 
-  if (verification.ok && !options.keepSuccessful) {
+  if (classification === "green-complete-output" && !options.keepSuccessful) {
     fs.rmSync(outputRoot, { recursive: true, force: true });
   }
   if (greenCorruptOutput || !cliGreen) break;

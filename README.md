@@ -58,6 +58,20 @@ Use synchronous writes only as a diagnostic control:
 npm run control:sync
 ```
 
+Create real native file-handle pressure in the compiler process, then verify
+the output before releasing those handles and closing the compiler:
+
+```sh
+npm run reproduce:native-emfile
+```
+
+The pressure runner repeatedly opens one inert file until Windows returns
+`EMFILE`/`ENFILE` or a configurable safety cap is reached. After actual
+exhaustion it releases a small headroom, runs Rspack with the untouched output
+filesystem, and keeps the remaining handles open until the parent process has
+verified every output. This mode does not patch Rspack or inject a synthetic
+filesystem error.
+
 `default` is the actual reproducer. `instrumented` changes the filesystem
 object by wrapping async writes, and `sync` intentionally serializes writes;
 neither control should replace the default result.
@@ -66,7 +80,7 @@ The standard workload copies 13,500 files of 8 KiB each, for 110,592,000 bytes
 per attempt. Override the workload directly when tuning stress:
 
 ```sh
-node ./scripts/run.mjs --mode default --attempts 50 --count 20000 --bytes 8192 --uv-threadpool-size 4
+node ./scripts/run.mjs --mode default --attempts 5 --count 20000 --bytes 8192 --uv-threadpool-size 4
 ```
 
 Add `--keep-successful` to preserve complete output directories. Corrupt and
@@ -78,16 +92,20 @@ Each run creates `runs/<session>/summary.json`. Every attempt also contains:
 
 - `result.json`: process status, full verifier result, environment, and signatures
 - `cli.stdout.log` and `cli.stderr.log`: Rspack CLI output
+- `compiler.stdout.log` and `compiler.stderr.log`: native-pressure compiler output
 - `telemetry.json`: present only in `instrumented` and `sync` modes
 - `dist/`: retained for corrupt or failed attempts
 
 Classifications:
 
-| Classification          | Meaning                                              |
-| ----------------------- | ---------------------------------------------------- |
-| `green-complete-output` | Rspack exited `0`; every output matches the manifest |
-| `green-corrupt-output`  | Rspack exited `0`; output verification failed        |
-| `compiler-failed`       | Rspack exited nonzero or could not be spawned        |
+| Classification               | Meaning                                               |
+| ---------------------------- | ----------------------------------------------------- |
+| `green-complete-output`      | Rspack exited `0`; every output matches the manifest  |
+| `green-corrupt-output`       | Rspack exited `0`; output verification failed         |
+| `compiler-failed`            | Rspack exited nonzero or could not be spawned         |
+| `verifier-failed`            | The parent could not verify the output tree           |
+| `emfile-observed`            | The compiler or filesystem returned `EMFILE`/`ENFILE` |
+| `pressure-limit-not-reached` | The safety cap was reached before native exhaustion   |
 
 The runner exits nonzero for any classification other than
 `green-complete-output`. A nonzero result therefore marks a GitHub Actions job
@@ -116,8 +134,9 @@ The affected deployment used `1.7.11`. Later versions of interest are `2.1.5`,
 workflow. It runs a matrix of:
 
 - Windows Server 2022 and Windows Server 2025
-- Node.js 20 and Node.js 22
+- An exact Node.js version; the affected deployment used `22.17.0`
 - A selected exact Rspack version and filesystem mode
+- Optional native handle pressure with configurable headroom and a safety cap
 
 Start with Rspack `1.7.11` in `default` mode. If it reproduces, rerun the same
 matrix in `instrumented` mode, then `sync` mode. Compare `2.1.6` and `2.1.10`
