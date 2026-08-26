@@ -2,14 +2,13 @@
 
 ## System Info
 
-<!-- Replace with environment.txt from the failing Actions artifact. -->
-
 ```text
 System:
-  OS: Microsoft Windows Server 2022 or 2025
+  OS: Windows Server 2022 Datacenter 10.0.20348
+      Windows Server 2025 Datacenter 10.0.26100
 Binaries:
   Node: 22.17.0
-  npm: <from artifact>
+  npm: 10.9.2
 npmPackages:
   @rspack/cli: 1.7.11
   @rspack/core: 1.7.11
@@ -37,21 +36,37 @@ SHA-256 after the Rspack process exits. It uses Rspack's untouched Node output
 filesystem in its primary mode. Optional controls can record async write
 fan-out or serialize writes with `writeFileSync`.
 
-<!-- Add only after a synthetic failing run has been captured. -->
-
 Synthetic reproduction result:
 
-- Rspack exit code: `<0>`
-- missing outputs: `<count>`
-- zero-byte outputs: `<count>`
-- wrong-size outputs: `<count>`
-- wrong-hash outputs: `<count>`
-- instrumented zero-length write requests: `<count>`
-- instrumented maximum in-flight writes: `<count>`
-- Windows runner / Node version: `<from summary.json>`
-- failing Actions run: `<URL>`
+- Rspack exit code: `0`
+- compiler callback error: none
+- compilation errors: none
+- expected and actual outputs: `13,500`
+- missing outputs: `0`
+- zero-byte outputs: `12,796`
+- wrong-size outputs: `12,796`
+- wrong-hash outputs: `12,796`
+- native handles opened before `EMFILE`: `8,188`
+- reserve handles held through verification: `8,124`
+- reserve-handle close errors: `0`
+- Windows runners: Server 2022 and Server 2025
+- Node version: `22.17.0`
+- failing Actions run: [32953337920](https://github.com/Robinfr/rspack-windows-zero-byte-output-repro/actions/runs/32953337920)
 
-Possibly related implementation history, without asserting the same root cause:
+The result was identical on both Windows runners. Verification completed before
+the child released its reserve handles and closed the compiler.
+
+Under the same workload and handle pressure, Rspack `2.1.6` produced the same
+count of 12,796 zero-byte files but returned a compiler error and exited `1`:
+
+```text
+Rspack FS Error: IO error: Error: EMFILE: too many open files, open '...\dist\group-097\asset-006369.bin'
+```
+
+Comparison Actions run:
+[32953791982](https://github.com/Robinfr/rspack-windows-zero-byte-output-repro/actions/runs/32953791982)
+
+The version comparison is consistent with this implementation history:
 
 - [#14889](https://github.com/web-infra-dev/rspack/issues/14889) reported
   silent asset loss when output emission hit `EMFILE`.
@@ -69,13 +84,13 @@ https://github.com/Robinfr/rspack-windows-zero-byte-output-repro
 
 1. Use native Windows or run the linked GitHub Actions workflow.
 2. Install dependencies with `npm ci`.
-3. Run `npm run reproduce` for the untouched asynchronous output filesystem.
+3. Run `npm run reproduce:native-emfile` to create native handle pressure while
+   retaining the untouched asynchronous output filesystem.
 4. Inspect `runs/<session>/summary.json` and each `result.json`.
 5. A reproduction is conclusive when Rspack exits `0` and the result is
    classified as `green-corrupt-output`.
-6. If default mode reproduces, run `npm run reproduce:instrumented` to capture
-   write lengths, callback errors, and maximum concurrency.
-7. Run `npm run control:sync` only as a diagnostic comparison.
+6. Install Rspack `2.1.6` without changing the lockfile and repeat the same
+   pressure run to compare silent output loss with surfaced `EMFILE`.
 
 Expected: Rspack either writes all 13,500 outputs exactly or exits nonzero with
 the underlying write error.

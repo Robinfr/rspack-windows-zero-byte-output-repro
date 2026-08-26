@@ -115,6 +115,25 @@ For an instrumented run, a zero-byte output is especially useful evidence when
 `telemetry.json` reports `zeroLengthWriteRequests: 0`: JavaScript requested a
 non-empty write, but the final file is empty.
 
+## Confirmed Windows result
+
+[Actions run 32953337920](https://github.com/Robinfr/rspack-windows-zero-byte-output-repro/actions/runs/32953337920)
+reproduced the silent failure with Rspack `1.7.11` and Node `22.17.0` on both
+Windows Server 2022 and Windows Server 2025. Native exhaustion occurred after
+8,188 handles were opened. With 8,124 reserve handles still held, Rspack
+returned success with no callback or compilation errors, but 12,796 of 13,500
+outputs were zero bytes. Every expected path existed.
+
+The parent completed output verification before requesting release, the child
+then acknowledged releasing all reserve handles without errors, and only then
+closed the compiler process.
+
+Under identical pressure, [Actions run 32953791982](https://github.com/Robinfr/rspack-windows-zero-byte-output-repro/actions/runs/32953791982)
+showed that Rspack `2.1.6` produced the same count of 12,796 zero-byte outputs
+but exited nonzero and returned `Rspack FS Error: ... EMFILE` from the compiler callback.
+This comparison isolates the behavior change as propagation of the output-write
+failure rather than successful output under the same pressure.
+
 ## Version comparison
 
 Install exact matching CLI and core versions without changing the committed
@@ -138,8 +157,8 @@ workflow. It runs a matrix of:
 - A selected exact Rspack version and filesystem mode
 - Optional native handle pressure with configurable headroom and a safety cap
 
-Start with Rspack `1.7.11` in `default` mode. If it reproduces, rerun the same
-matrix in `instrumented` mode, then `sync` mode. Compare `2.1.6` and `2.1.10`
+Start with Rspack `1.7.11` in `default` mode. Native handle pressure requires the
+untouched `default` output filesystem. Compare `2.1.6` under identical pressure
 only after capturing the baseline evidence.
 
 ## Why this workload
